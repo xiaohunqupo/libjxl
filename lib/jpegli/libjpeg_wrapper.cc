@@ -7,10 +7,12 @@
 // shared library that is API- and ABI-compatible with libjpeg-turbo's version
 // of libjpeg.so.
 
+#include <cstddef>
+#include <cstdio>
+
 #include "lib/jpegli/common.h"
 #include "lib/jpegli/decode.h"
 #include "lib/jpegli/encode.h"
-#include "lib/jpegli/error.h"
 
 struct jpeg_error_mgr *jpeg_std_error(struct jpeg_error_mgr *err) {
   return jpegli_std_error(err);
@@ -38,7 +40,7 @@ void jpeg_stdio_src(j_decompress_ptr cinfo, FILE *infile) {
 }
 
 void jpeg_mem_src(j_decompress_ptr cinfo, const unsigned char *inbuffer,
-                  unsigned long insize) {
+                  unsigned long insize /* NOLINT */) {
   jpegli_mem_src(cinfo, inbuffer, insize);
 }
 
@@ -122,11 +124,11 @@ boolean jpeg_read_icc_profile(j_decompress_ptr cinfo, JOCTET **icc_data_ptr,
 }
 
 void jpeg_abort_decompress(j_decompress_ptr cinfo) {
-  return jpegli_abort_decompress(cinfo);
+  jpegli_abort_decompress(cinfo);
 }
 
 void jpeg_destroy_decompress(j_decompress_ptr cinfo) {
-  return jpegli_destroy_decompress(cinfo);
+  jpegli_destroy_decompress(cinfo);
 }
 
 void jpeg_CreateCompress(j_compress_ptr cinfo, int version, size_t structsize) {
@@ -138,7 +140,7 @@ void jpeg_stdio_dest(j_compress_ptr cinfo, FILE *outfile) {
 }
 
 void jpeg_mem_dest(j_compress_ptr cinfo, unsigned char **outbuffer,
-                   unsigned long *outsize) {
+                   unsigned long *outsize /* NOLINT */) {
   jpegli_mem_dest(cinfo, outbuffer, outsize);
 }
 

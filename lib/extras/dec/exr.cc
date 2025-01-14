@@ -5,19 +5,61 @@
 
 #include "lib/extras/dec/exr.h"
 
-#if JPEGXL_ENABLE_EXR
-#include <ImfChromaticitiesAttribute.h>
+#include <cstdint>
+
+#include "lib/extras/dec/color_hints.h"
+#include "lib/extras/packed_image.h"
+#include "lib/extras/size_constraints.h"
+#include "lib/jxl/base/span.h"
+#include "lib/jxl/base/status.h"
+
+#if !JPEGXL_ENABLE_EXR
+
+namespace jxl {
+namespace extras {
+bool CanDecodeEXR() { return false; }
+
+Status DecodeImageEXR(Span<const uint8_t> bytes, const ColorHints& color_hints,
+                      PackedPixelFile* ppf,
+                      const SizeConstraints* constraints) {
+  (void)bytes;
+  (void)color_hints;
+  (void)ppf;
+  (void)constraints;
+  return JXL_FAILURE("EXR is not supported");
+}
+}  // namespace extras
+}  // namespace jxl
+
+#else  // JPEGXL_ENABLE_EXR
+
 #include <ImfIO.h>
+#include <ImfRgba.h>
 #include <ImfRgbaFile.h>
 #include <ImfStandardAttributes.h>
-#endif
+#include <OpenEXRConfig.h>
+#include <jxl/color_encoding.h>
+#include <jxl/types.h>
 
+#include <algorithm>
+#include <cstddef>
+#include <cstring>
+#include <memory>
+#include <utility>
 #include <vector>
+
+#include "lib/jxl/base/compiler_specific.h"
+
+#ifdef __EXCEPTIONS
+#include <IexBaseExc.h>
+#define JXL_EXR_THROW_LENGTH_ERROR(M) throw Iex::InputExc(M);
+#else  // __EXCEPTIONS
+#define JXL_EXR_THROW_LENGTH_ERROR(M) JXL_CRASH()
+#endif  // __EXCEPTIONS
 
 namespace jxl {
 namespace extras {
 
-#if JPEGXL_ENABLE_EXR
 namespace {
 
 namespace OpenEXR = OPENEXR_IMF_NAMESPACE;
@@ -39,20 +81,39 @@ class InMemoryIStream : public OpenEXR::IStream {
 
   bool isMemoryMapped() const override { return true; }
   char* readMemoryMapped(const int n) override {
-    JXL_ASSERT(pos_ + n <= bytes_.size());
+    if (pos_ + n < pos_) {
+      JXL_EXR_THROW_LENGTH_ERROR("Overflow");
+    }
+    if (pos_ + n > bytes_.size()) {
+      JXL_EXR_THROW_LENGTH_ERROR("Read past end of file");
+    }
     char* const result =
         const_cast<char*>(reinterpret_cast<const char*>(bytes_.data() + pos_));
     pos_ += n;
     return result;
   }
   bool read(char c[], const int n) override {
-    std::copy_n(readMemoryMapped(n), n, c);
+    // That is not stated in documentation, but the OpenEXR code expects that
+    // when requested amount is not accessible and exception is thrown, all
+    // the accessible data is read.
+    if (pos_ + n < pos_) {
+      JXL_EXR_THROW_LENGTH_ERROR("Overflow");
+    }
+    if (pos_ + n > bytes_.size()) {
+      int can_read = static_cast<int>(bytes_.size() - pos_);
+      std::copy_n(readMemoryMapped(can_read), can_read, c);
+      JXL_EXR_THROW_LENGTH_ERROR("Read past end of file");
+    } else {
+      std::copy_n(readMemoryMapped(n), n, c);
+    }
     return pos_ < bytes_.size();
   }
 
   ExrInt64 tellg() override { return pos_; }
   void seekg(const ExrInt64 pos) override {
-    JXL_ASSERT(pos + 1 <= bytes_.size());
+    if (pos >= bytes_.size()) {
+      JXL_EXR_THROW_LENGTH_ERROR("Seeks past end of file");
+    }
     pos_ = pos;
   }
 
@@ -62,26 +123,18 @@ class InMemoryIStream : public OpenEXR::IStream {
 };
 
 }  // namespace
-#endif
 
-bool CanDecodeEXR() {
-#if JPEGXL_ENABLE_EXR
-  return true;
-#else
-  return false;
-#endif
-}
+bool CanDecodeEXR() { return true; }
 
 Status DecodeImageEXR(Span<const uint8_t> bytes, const ColorHints& color_hints,
                       PackedPixelFile* ppf,
                       const SizeConstraints* constraints) {
-#if JPEGXL_ENABLE_EXR
   InMemoryIStream is(bytes);
 
 #ifdef __EXCEPTIONS
   std::unique_ptr<OpenEXR::RgbaInputFile> input_ptr;
   try {
-    input_ptr.reset(new OpenEXR::RgbaInputFile(is));
+    input_ptr = jxl::make_unique<OpenEXR::RgbaInputFile>(is);
   } catch (...) {
     // silently return false if it is not an EXR file
     return false;
@@ -121,7 +174,12 @@ Status DecodeImageEXR(Span<const uint8_t> bytes, const ColorHints& color_hints,
   };
   ppf->frames.clear();
   // Allocates the frame buffer.
-  ppf->frames.emplace_back(image_size.x, image_size.y, format);
+  {
+    JXL_ASSIGN_OR_RETURN(
+        PackedFrame frame,
+        PackedFrame::Create(image_size.x, image_size.y, format));
+    ppf->frames.emplace_back(std::move(frame));
+  }
   const auto& frame = ppf->frames.back();
 
   const int row_size = input.dataWindow().size().x + 1;
@@ -188,14 +246,13 @@ Status DecodeImageEXR(Span<const uint8_t> bytes, const ColorHints& color_hints,
   if (has_alpha) {
     ppf->info.alpha_bits = kExrAlphaBits;
     ppf->info.alpha_exponent_bits = ppf->info.exponent_bits_per_sample;
-    ppf->info.alpha_premultiplied = true;
+    ppf->info.alpha_premultiplied = JXL_TRUE;
   }
   ppf->info.intensity_target = intensity_target;
   return true;
-#else
-  return false;
-#endif
 }
 
 }  // namespace extras
 }  // namespace jxl
+
+#endif  // JPEGXL_ENABLE_EXR

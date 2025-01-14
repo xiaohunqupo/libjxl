@@ -6,22 +6,18 @@
 #ifndef LIB_JPEGLI_TEST_UTILS_H_
 #define LIB_JPEGLI_TEST_UTILS_H_
 
-#include <stddef.h>
-#include <stdint.h>
-
-#include <algorithm>
+#include <csetjmp>
+#include <cstddef>
+#include <cstdint>
+#include <ostream>
 #include <string>
 #include <vector>
 
-/* clang-format off */
-#include <stdio.h>
-#include <jpeglib.h>
-#include <setjmp.h>
-/* clang-format on */
-
 #include "lib/jpegli/common.h"
-#include "lib/jpegli/libjpeg_test_util.h"
 #include "lib/jpegli/test_params.h"
+#include "lib/jpegli/types.h"
+#include "lib/jxl/base/include_jpeglib.h"  // NOLINT
+#include "lib/jxl/base/status.h"
 
 namespace jpegli {
 
@@ -55,7 +51,6 @@ void VerifyScanHeader(const CompressParams& jparams, j_decompress_ptr cinfo);
 
 void SetDecompressParams(const DecompressParams& dparams,
                          j_decompress_ptr cinfo);
-
 void SetScanDecompressParams(const DecompressParams& dparams,
                              j_decompress_ptr cinfo, int scan_number);
 
@@ -66,7 +61,7 @@ void UnmapColors(uint8_t* row, size_t xsize, int components,
                  JSAMPARRAY colormap, size_t num_colors);
 
 std::string GetTestDataPath(const std::string& filename);
-std::vector<uint8_t> ReadTestData(const std::string& filename);
+jxl::StatusOr<std::vector<uint8_t>> ReadTestData(const std::string& filename);
 
 class PNMParser {
  public:
@@ -95,7 +90,7 @@ bool ReadPNM(const std::vector<uint8_t>& data, size_t* xsize, size_t* ysize,
              size_t* num_channels, size_t* bitdepth,
              std::vector<uint8_t>* pixels);
 
-void SetNumChannels(J_COLOR_SPACE colorspace, size_t* channels);
+jxl::Status SetNumChannels(J_COLOR_SPACE colorspace, size_t* channels);
 
 void ConvertToGrayscale(TestImage* img);
 
@@ -124,6 +119,8 @@ void VerifyOutputImage(const TestImage& input, const TestImage& output,
 
 void VerifyOutputImage(const TestImage& input, const TestImage& output,
                        double max_rms, double max_diff = 255.0);
+
+void Check(bool ok);
 
 }  // namespace jpegli
 

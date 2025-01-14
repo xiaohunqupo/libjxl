@@ -44,6 +44,11 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     add_executable(pixbufloader_test pixbufloader_test.cc)
     target_link_libraries(pixbufloader_test PkgConfig::Gdk)
 
+    find_program (XDG_MIME_PROGRAM xdg-mime)
+    if (NOT XDG_MIME_PROGRAM)
+      message(FATAL "xdg-mime is required for testing pixbufloader")
+    endif()
+
     # Create a mime cache for test.
     add_custom_command(
       OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/mime/mime.cache"
@@ -74,7 +79,7 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
         COMMAND
           ${XVFB_PROGRAM_PREFIX} $<TARGET_FILE:pixbufloader_test>
           "${CMAKE_CURRENT_SOURCE_DIR}/loaders_test.cache"
-          "${CMAKE_SOURCE_DIR}/testdata/jxl/blending/cropped_traffic_light.jxl"
+          "${JPEGXL_TEST_DATA_PATH}/jxl/blending/cropped_traffic_light.jxl"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       )
       set_tests_properties(pixbufloader_test_jxl PROPERTIES SKIP_RETURN_CODE 254)

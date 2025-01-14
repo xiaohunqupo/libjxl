@@ -3,11 +3,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-#include <jxl/thread_parallel_runner.h>
-#include <jxl/thread_parallel_runner_cxx.h>
-
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
 #include <sstream>
-#include <string>
 #include <vector>
 
 #include "lib/jxl/test_utils.h"
@@ -39,6 +38,6 @@ TEST_P(DjxlFuzzerTest, TestOne) {
   std::ostringstream os;
   os << "oss-fuzz/clusterfuzz-testcase-minimized-djxl_fuzzer-" << id;
   printf("Testing %s\n", os.str().c_str());
-  const jxl::PaddedBytes input = jxl::test::ReadTestData(os.str());
+  const std::vector<uint8_t> input = jxl::test::ReadTestData(os.str());
   LLVMFuzzerTestOneInput(input.data(), input.size());
 }

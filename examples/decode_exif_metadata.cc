@@ -9,20 +9,22 @@
 
 #include <jxl/decode.h>
 #include <jxl/decode_cxx.h>
-#include <limits.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
+#include <jxl/types.h>
 
+#include <climits>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <vector>
 
 bool DecodeJpegXlExif(const uint8_t* jxl, size_t size,
                       std::vector<uint8_t>* exif) {
-  auto dec = JxlDecoderMake(nullptr);
+  JxlDecoderPtr dec = JxlDecoderMake(nullptr);
 
   // We're only interested in the Exif boxes in this example, so don't
   // subscribe to events related to pixel data.
-  if (JXL_DEC_SUCCESS != JxlDecoderSubscribeEvents(dec.get(), JXL_DEC_BOX)) {
+  if (JXL_DEC_SUCCESS != JxlDecoderSubscribeEvents(
+                             dec.get(), JXL_DEC_BOX | JXL_DEC_BOX_COMPLETE)) {
     fprintf(stderr, "JxlDecoderSubscribeEvents failed\n");
     return false;
   }
@@ -37,7 +39,7 @@ bool DecodeJpegXlExif(const uint8_t* jxl, size_t size,
   JxlDecoderSetInput(dec.get(), jxl, size);
   JxlDecoderCloseInput(dec.get());
 
-  const constexpr size_t kChunkSize = 65536;
+  const size_t kChunkSize = 65536;
   size_t output_pos = 0;
 
   for (;;) {
@@ -56,8 +58,9 @@ bool DecodeJpegXlExif(const uint8_t* jxl, size_t size,
         return true;
       }
       JxlBoxType type;
-      if (JXL_DEC_SUCCESS !=
-          JxlDecoderGetBoxType(dec.get(), type, support_decompression)) {
+      status = JxlDecoderGetBoxType(dec.get(), type,
+                                    TO_JXL_BOOL(support_decompression));
+      if (JXL_DEC_SUCCESS != status) {
         fprintf(stderr, "Error, failed to get box type\n");
         return false;
       }
@@ -71,7 +74,7 @@ bool DecodeJpegXlExif(const uint8_t* jxl, size_t size,
       exif->resize(exif->size() + kChunkSize);
       JxlDecoderSetBoxBuffer(dec.get(), exif->data() + output_pos,
                              exif->size() - output_pos);
-    } else if (status == JXL_DEC_SUCCESS) {
+    } else if (status == JXL_DEC_BOX_COMPLETE) {
       if (!exif->empty()) {
         size_t remaining = JxlDecoderReleaseBoxBuffer(dec.get());
         exif->resize(exif->size() - remaining);
@@ -96,7 +99,7 @@ bool LoadFile(const char* filename, std::vector<uint8_t>* out) {
     return false;
   }
 
-  long size = ftell(file);
+  long size = ftell(file);  // NOLINT
   // Avoid invalid file or directory.
   if (size >= LONG_MAX || size < 0) {
     fclose(file);

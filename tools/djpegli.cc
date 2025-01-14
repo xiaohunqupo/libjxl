@@ -3,16 +3,18 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+#include <jxl/types.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "lib/extras/dec/jpegli.h"
-#include "lib/extras/enc/apng.h"
 #include "lib/extras/enc/encode.h"
+#include "lib/extras/packed_image.h"
 #include "lib/extras/time.h"
 #include "lib/jxl/base/printf_macros.h"
 #include "tools/cmdline.h"
@@ -26,12 +28,9 @@ namespace {
 struct Args {
   void AddCommandLineOptions(CommandLineParser* cmdline) {
     std::string output_help("The output can be ");
-    if (jxl::extras::GetAPNGEncoder()) {
-      output_help.append("PNG, ");
-    }
-    output_help.append("PFM or PPM/PGM/PNM");
+    output_help.append(jxl::extras::ListOfEncodeCodecs());
     cmdline->AddPositionalOption("INPUT", /* required = */ true,
-                                 "The JPG input file.", &file_in);
+                                 "The JPEG input file.", &file_in);
 
     cmdline->AddPositionalOption("OUTPUT", /* required = */ true, output_help,
                                  &file_out);
@@ -175,7 +174,7 @@ int DJpegliMain(int argc, const char* argv[]) {
     return EXIT_FAILURE;
   }
   jxl::extras::EncodedImage encoded_image;
-  if (!encoder->Encode(ppf, &encoded_image) ||
+  if (!encoder->Encode(ppf, &encoded_image, nullptr) ||
       encoded_image.bitstreams.empty()) {
     fprintf(stderr, "Encode failed\n");
     return EXIT_FAILURE;

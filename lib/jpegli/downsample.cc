@@ -5,6 +5,12 @@
 
 #include "lib/jpegli/downsample.h"
 
+#include <cstddef>
+#include <cstdio>
+
+#include "lib/jpegli/common.h"
+#include "lib/jxl/base/compiler_specific.h"
+
 #undef HWY_TARGET_INCLUDE
 #define HWY_TARGET_INCLUDE "lib/jpegli/downsample.cc"
 #include <hwy/foreach_target.h>
@@ -29,7 +35,7 @@ void DownsampleRow2x1(const float* row_in, size_t len, float* row_out) {
   const size_t N = Lanes(d);
   const size_t len_out = len / 2;
   const auto mul = Set(d, 0.5f);
-  Vec<D> v0, v1;
+  Vec<D> v0, v1;  // NOLINT
   for (size_t x = 0; x < len_out; x += N) {
     LoadInterleaved2(d, row_in + 2 * x, v0, v1);
     Store(Mul(mul, Add(v0, v1)), d, row_out + x);
@@ -40,7 +46,7 @@ void DownsampleRow3x1(const float* row_in, size_t len, float* row_out) {
   const size_t N = Lanes(d);
   const size_t len_out = len / 3;
   const auto mul = Set(d, 1.0f / 3);
-  Vec<D> v0, v1, v2;
+  Vec<D> v0, v1, v2;  // NOLINT
   for (size_t x = 0; x < len_out; x += N) {
     LoadInterleaved3(d, row_in + 3 * x, v0, v1, v2);
     Store(Mul(mul, Add(Add(v0, v1), v2)), d, row_out + x);
@@ -51,7 +57,7 @@ void DownsampleRow4x1(const float* row_in, size_t len, float* row_out) {
   const size_t N = Lanes(d);
   const size_t len_out = len / 4;
   const auto mul = Set(d, 0.25f);
-  Vec<D> v0, v1, v2, v3;
+  Vec<D> v0, v1, v2, v3;  // NOLINT
   for (size_t x = 0; x < len_out; x += N) {
     LoadInterleaved4(d, row_in + 4 * x, v0, v1, v2, v3);
     Store(Mul(mul, Add(Add(v0, v1), Add(v2, v3))), d, row_out + x);
@@ -91,7 +97,7 @@ void Downsample2x2(float* rows_in[MAX_SAMP_FACTOR], size_t len,
   const auto mul = Set(d, 0.25f);
   float* row0 = rows_in[0];
   float* row1 = rows_in[1];
-  Vec<D> v0, v1, v2, v3;
+  Vec<D> v0, v1, v2, v3;  // NOLINT
   for (size_t x = 0; x < len_out; x += N) {
     LoadInterleaved2(d, row0 + 2 * x, v0, v1);
     LoadInterleaved2(d, row1 + 2 * x, v2, v3);
@@ -295,13 +301,14 @@ void DownsampleInputBuffer(j_compress_ptr cinfo) {
     }
     auto& input = *m->smooth_input[c];
     auto& output = *m->raw_data[c];
-    const size_t yout0 = y0 / v_factor;
+    const size_t y_out0 = y0 / v_factor;
     float* rows_in[MAX_SAMP_FACTOR];
-    for (size_t yin = y0, yout = yout0; yin < y1; yin += v_factor, ++yout) {
+    for (size_t y_in = y0, y_out = y_out0; y_in < y1;
+         y_in += v_factor, ++y_out) {
       for (int iy = 0; iy < v_factor; ++iy) {
-        rows_in[iy] = input.Row(yin + iy);
+        rows_in[iy] = input.Row(y_in + iy);
       }
-      float* row_out = output.Row(yout);
+      float* row_out = output.Row(y_out);
       (*m->downsample_method[c])(rows_in, xsize_padded, row_out);
     }
   }

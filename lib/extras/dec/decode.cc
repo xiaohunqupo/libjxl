@@ -5,15 +5,28 @@
 
 #include "lib/extras/dec/decode.h"
 
+#include <jxl/codestream_header.h>
+#include <jxl/types.h>
+
+#include <algorithm>
+#include <cctype>
+#include <cstddef>
+#include <cstdint>
 #include <locale>
+#include <string>
 
 #include "lib/extras/dec/apng.h"
+#include "lib/extras/dec/color_hints.h"
 #include "lib/extras/dec/exr.h"
 #include "lib/extras/dec/gif.h"
 #include "lib/extras/dec/jpg.h"
 #include "lib/extras/dec/jxl.h"
 #include "lib/extras/dec/pgx.h"
 #include "lib/extras/dec/pnm.h"
+#include "lib/extras/packed_image.h"
+#include "lib/jxl/base/compiler_specific.h"
+#include "lib/jxl/base/span.h"
+#include "lib/jxl/base/status.h"
 
 namespace jxl {
 namespace extras {
@@ -22,37 +35,30 @@ namespace {
 // Any valid encoding is larger (ensures codecs can read the first few bytes)
 constexpr size_t kMinBytes = 9;
 
-void BasenameAndExtension(std::string path, std::string* basename,
-                          std::string* extension) {
-  // Pattern: file.jxl
+std::string GetExtension(const std::string& path) {
+  // Pattern: "name.png"
   size_t pos = path.find_last_of('.');
-  if (pos < path.size()) {
-    *basename = path.substr(0, pos);
-    *extension = path.substr(pos);
-    return;
+  if (pos != std::string::npos) {
+    return path.substr(pos);
   }
-  // Pattern: jxl:-
-  pos = path.find_first_of(':');
-  if (pos < path.size()) {
-    *basename = path.substr(pos + 1);
-    *extension = "." + path.substr(0, pos);
-    return;
-  }
+
   // Extension not found
-  *basename = path;
-  *extension = "";
+  return "";
 }
 
 }  // namespace
 
-Codec CodecFromPath(std::string path, size_t* JXL_RESTRICT bits_per_sample,
-                    std::string* basename, std::string* extension) {
-  std::string base;
-  std::string ext;
-  BasenameAndExtension(path, &base, &ext);
-  if (basename) *basename = base;
-  if (extension) *extension = ext;
-
+Codec CodecFromPath(const std::string& path,
+                    size_t* JXL_RESTRICT bits_per_sample,
+                    std::string* extension) {
+  std::string ext = GetExtension(path);
+  if (extension) {
+    if (extension->empty()) {
+      *extension = ext;
+    } else {
+      ext = *extension;
+    }
+  }
   std::transform(ext.begin(), ext.end(), ext.begin(), [](char c) {
     return std::tolower(c, std::locale::classic());
   });
@@ -98,6 +104,15 @@ bool CanDecode(Codec codec) {
   }
 }
 
+std::string ListOfDecodeCodecs() {
+  std::string list_of_codecs("JXL, PPM, PNM, PFM, PAM, PGX");
+  if (CanDecode(Codec::kPNG)) list_of_codecs.append(", PNG, APNG");
+  if (CanDecode(Codec::kGIF)) list_of_codecs.append(", GIF");
+  if (CanDecode(Codec::kJPG)) list_of_codecs.append(", JPEG");
+  if (CanDecode(Codec::kEXR)) list_of_codecs.append(", EXR");
+  return list_of_codecs;
+}
+
 Status DecodeBytes(const Span<const uint8_t> bytes,
                    const ColorHints& color_hints, extras::PackedPixelFile* ppf,
                    const SizeConstraints* constraints, Codec* orig_codec) {
@@ -106,7 +121,7 @@ Status DecodeBytes(const Span<const uint8_t> bytes,
   *ppf = extras::PackedPixelFile();
 
   // Default values when not set by decoders.
-  ppf->info.uses_original_profile = true;
+  ppf->info.uses_original_profile = JXL_TRUE;
   ppf->info.orientation = JXL_ORIENT_IDENTITY;
 
   const auto choose_codec = [&]() -> Codec {
@@ -120,9 +135,16 @@ Status DecodeBytes(const Span<const uint8_t> bytes,
       return Codec::kPNM;
     }
     JXLDecompressParams dparams = {};
+    for (const uint32_t num_channels : {1, 2, 3, 4}) {
+      dparams.accepted_formats.push_back(
+          {num_channels, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, /*align=*/0});
+    }
+    dparams.output_bitdepth.type = JXL_BIT_DEPTH_FROM_CODESTREAM;
     size_t decoded_bytes;
     if (DecodeImageJXL(bytes.data(), bytes.size(), dparams, &decoded_bytes,
-                       ppf)) {
+                       ppf) &&
+        ApplyColorHints(color_hints, true, ppf->info.num_color_channels == 1,
+                        ppf)) {
       return Codec::kJXL;
     }
     if (DecodeImageGIF(bytes, color_hints, ppf, constraints)) {

@@ -5,6 +5,11 @@
 
 #include "lib/extras/dec/color_description.h"
 
+#include <jxl/color_encoding.h>
+
+#include <cstdio>
+#include <string>
+
 #include "lib/jxl/color_encoding_internal.h"
 #include "lib/jxl/test_utils.h"
 #include "lib/jxl/testing.h"
@@ -21,8 +26,7 @@ TEST(ColorDescriptionTest, RoundTripAll) {
     JxlColorEncoding c_external = {};
     EXPECT_TRUE(ParseDescription(description, &c_external));
     ColorEncoding c_internal;
-    EXPECT_TRUE(
-        ConvertExternalToInternalColorEncoding(c_external, &c_internal));
+    EXPECT_TRUE(c_internal.FromExternal(c_external));
     EXPECT_TRUE(c_original.SameColorEncoding(c_internal))
         << "Where c_original=" << c_original
         << " and c_internal=" << c_internal;

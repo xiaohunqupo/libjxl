@@ -7,11 +7,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <string>
 #include <vector>
 
 #include "lib/extras/dec/decode.h"
 #include "lib/extras/enc/jpegli.h"
+#include "lib/extras/packed_image.h"
 #include "lib/extras/time.h"
+#include "lib/jxl/base/common.h"
 #include "lib/jxl/base/printf_macros.h"
 #include "lib/jxl/base/span.h"
 #include "tools/args.h"
@@ -26,20 +29,11 @@ namespace {
 struct Args {
   void AddCommandLineOptions(CommandLineParser* cmdline) {
     std::string input_help("the input can be ");
-    if (jxl::extras::CanDecode(jxl::extras::Codec::kPNG)) {
-      input_help.append("PNG, APNG, ");
-    }
-    if (jxl::extras::CanDecode(jxl::extras::Codec::kGIF)) {
-      input_help.append("GIF, ");
-    }
-    if (jxl::extras::CanDecode(jxl::extras::Codec::kEXR)) {
-      input_help.append("EXR, ");
-    }
-    input_help.append("PPM, PFM, or PGX");
+    input_help.append(jxl::extras::ListOfDecodeCodecs());
     cmdline->AddPositionalOption("INPUT", /* required = */ true, input_help,
                                  &file_in);
     cmdline->AddPositionalOption("OUTPUT", /* required = */ true,
-                                 "the compressed JPG output file", &file_out);
+                                 "the compressed JPEG output file", &file_out);
 
     cmdline->AddOptionFlag('\0', "disable_output",
                            "No output file will be written (for benchmarking)",
@@ -207,7 +201,7 @@ int CJpegliMain(int argc, const char* argv[]) {
   }
 
   jxl::extras::PackedPixelFile ppf;
-  if (!jxl::extras::DecodeBytes(jxl::Span<const uint8_t>(input_bytes),
+  if (!jxl::extras::DecodeBytes(jxl::Bytes(input_bytes),
                                 args.color_hints_proxy.target, &ppf)) {
     fprintf(stderr, "Failed to decode input image %s\n", args.file_in);
     return EXIT_FAILURE;
@@ -252,7 +246,8 @@ int CJpegliMain(int argc, const char* argv[]) {
   }
   if (!args.quiet) {
     fprintf(stderr, "Compressed to %" PRIuS " bytes ", jpeg_bytes.size());
-    const size_t num_pixels = ppf.info.xsize * ppf.info.ysize;
+    const double num_pixels =
+        static_cast<double>(ppf.info.xsize) * ppf.info.ysize;
     const double bpp =
         static_cast<double>(jpeg_bytes.size() * jxl::kBitsPerByte) / num_pixels;
     fprintf(stderr, "(%.3f bpp).\n", bpp);

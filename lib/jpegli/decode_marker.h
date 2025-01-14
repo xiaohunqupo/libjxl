@@ -6,7 +6,8 @@
 #ifndef LIB_JPEGLI_DECODE_MARKER_H_
 #define LIB_JPEGLI_DECODE_MARKER_H_
 
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
 
 #include "lib/jpegli/common.h"
 
@@ -22,8 +23,8 @@ namespace jpegli {
 //       EOI marker. Input buffer refill is handled by the caller;
 //   * JPEG_REACHED_SOS, if the next SOS marker is found;
 //   * JPEG_REACHED_EOR, if the end of the input is found.
-int ProcessMarkers(j_decompress_ptr cinfo, const uint8_t* const data,
-                   const size_t len, size_t* pos);
+int ProcessMarkers(j_decompress_ptr cinfo, const uint8_t* data, size_t len,
+                   size_t* pos);
 
 jpeg_marker_parser_method GetMarkerProcessor(j_decompress_ptr cinfo);
 

@@ -7,6 +7,8 @@
 
 #include <string.h>
 
+#include "lib/jxl/base/compiler_specific.h"
+
 #undef HWY_TARGET_INCLUDE
 #define HWY_TARGET_INCLUDE "lib/jpegli/upsample.cc"
 #include <hwy/foreach_target.h>
@@ -122,7 +124,7 @@ HWY_EXPORT(Upsample2Vertical);
 
 void Upsample2Horizontal(float* JXL_RESTRICT row,
                          float* JXL_RESTRICT scratch_space, size_t len_out) {
-  return HWY_DYNAMIC_DISPATCH(Upsample2Horizontal)(row, scratch_space, len_out);
+  HWY_DYNAMIC_DISPATCH(Upsample2Horizontal)(row, scratch_space, len_out);
 }
 
 void Upsample2Vertical(const float* JXL_RESTRICT row_top,
@@ -130,8 +132,8 @@ void Upsample2Vertical(const float* JXL_RESTRICT row_top,
                        const float* JXL_RESTRICT row_bot,
                        float* JXL_RESTRICT row_out0,
                        float* JXL_RESTRICT row_out1, size_t len) {
-  return HWY_DYNAMIC_DISPATCH(Upsample2Vertical)(row_top, row_mid, row_bot,
-                                                 row_out0, row_out1, len);
+  HWY_DYNAMIC_DISPATCH(Upsample2Vertical)
+  (row_top, row_mid, row_bot, row_out0, row_out1, len);
 }
 }  // namespace jpegli
 #endif  // HWY_ONCE

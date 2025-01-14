@@ -5,11 +5,20 @@
 
 #include "lib/jpegli/bitstream.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <initializer_list>
+#include <vector>
 
 #include "lib/jpegli/bit_writer.h"
+#include "lib/jpegli/common.h"
+#include "lib/jpegli/common_internal.h"
+#include "lib/jpegli/encode_internal.h"
 #include "lib/jpegli/error.h"
-#include "lib/jpegli/memory_manager.h"
+#include "lib/jxl/base/compiler_specific.h"
 
 namespace jpegli {
 
@@ -90,8 +99,8 @@ bool EncodeDQT(j_compress_ptr cinfo, bool write_all_tables) {
       JPEGLI_ERROR("Missing quant table %d", i);
     }
     int precision = 0;
-    for (size_t k = 0; k < DCTSIZE2; ++k) {
-      if (quant_table->quantval[k] > 255) {
+    for (UINT16 q : quant_table->quantval) {
+      if (q > 255) {
         precision = 1;
         is_baseline = false;
       }
@@ -123,7 +132,6 @@ bool EncodeDQT(j_compress_ptr cinfo, bool write_all_tables) {
 
 void EncodeSOF(j_compress_ptr cinfo, bool is_baseline) {
   if (cinfo->data_precision != kJpegPrecision) {
-    is_baseline = false;
     JPEGLI_ERROR("Unsupported data precision %d", cinfo->data_precision);
   }
   const uint8_t marker = cinfo->progressive_mode ? 0xc2
@@ -195,14 +203,14 @@ void EncodeDHT(j_compress_ptr cinfo, size_t offset, size_t num) {
   data[pos++] = 0xC4;
   data[pos++] = marker_len >> 8u;
   data[pos++] = marker_len & 0xFFu;
-  for (size_t i = 0; i < num; ++i) {
-    const JHUFF_TBL& table = m->huffman_tables[offset + i];
+  for (size_t t = 0; t < num; ++t) {
+    const JHUFF_TBL& table = m->huffman_tables[offset + t];
     if (table.sent_table) continue;
     size_t total_count = 0;
     for (size_t i = 0; i <= kJpegHuffmanMaxBitLength; ++i) {
       total_count += table.bits[i];
     }
-    data[pos++] = m->slot_id_map[offset + i];
+    data[pos++] = m->slot_id_map[offset + t];
     for (size_t i = 1; i <= kJpegHuffmanMaxBitLength; ++i) {
       data[pos++] = table.bits[i];
     }
@@ -302,7 +310,7 @@ void WriteBlock(const int32_t* JXL_RESTRICT symbols,
 
 namespace {
 
-static JXL_INLINE void EmitMarker(JpegBitWriter* bw, int marker) {
+JXL_INLINE void EmitMarker(JpegBitWriter* bw, int marker) {
   bw->data[bw->pos++] = 0xFF;
   bw->data[bw->pos++] = marker;
 }
@@ -317,9 +325,9 @@ void WriteTokens(j_compress_ptr cinfo, int scan_index, JpegBitWriter* bw) {
   size_t restart_idx = 0;
   size_t next_restart = sti.restarts[restart_idx];
   uint8_t* context_map = m->context_map;
-  for (size_t i = 0; i < num_token_arrays; ++i) {
-    Token* tokens = m->token_arrays[i].tokens;
-    size_t num_tokens = m->token_arrays[i].num_tokens;
+  for (size_t ta = 0; ta < num_token_arrays; ++ta) {
+    Token* tokens = m->token_arrays[ta].tokens;
+    size_t num_tokens = m->token_arrays[ta].num_tokens;
     if (sti.token_offset < total_tokens + num_tokens &&
         total_tokens < sti.token_offset + sti.num_tokens) {
       size_t start_ix =

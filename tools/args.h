@@ -8,13 +8,13 @@
 
 // Helpers for parsing command line arguments. No include guard needed.
 
-#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "lib/extras/dec/color_hints.h"
 #include "lib/jxl/base/override.h"
@@ -36,20 +36,6 @@ static inline bool ParseOverride(const char* arg, jxl::Override* out) {
   }
   fprintf(stderr, "Invalid flag, %s must be 0 or 1\n", arg);
   return JXL_FAILURE("Args");
-}
-
-static inline bool ParseFloatPair(const char* arg,
-                                  std::pair<float, float>* out) {
-  int parsed = sscanf(arg, "%f,%f", &out->first, &out->second);
-  if (parsed == 1) {
-    out->second = out->first;
-  } else if (parsed != 2) {
-    fprintf(stderr,
-            "Unable to interpret as float pair separated by a comma: %s.\n",
-            arg);
-    return JXL_FAILURE("Args");
-  }
-  return true;
 }
 
 template <typename Callback>
@@ -82,6 +68,13 @@ struct ColorHintsProxy {
       JXL_RETURN_IF_ERROR(ReadFile(value, &icc));
       const char* data = reinterpret_cast<const char*>(icc.data());
       target.Add("icc", std::string(data, data + icc.size()));
+    } else if (key == "exif" || key == "xmp" || key == "jumbf") {
+      std::vector<uint8_t> metadata;
+      JXL_RETURN_IF_ERROR(ReadFile(value, &metadata));
+      const char* data = reinterpret_cast<const char*>(metadata.data());
+      target.Add(key, std::string(data, data + metadata.size()));
+    } else if (key == "strip") {
+      target.Add(value, "");
     } else {
       target.Add(key, value);
     }
